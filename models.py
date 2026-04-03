@@ -15,19 +15,6 @@ from torch_geometric.nn import (
 
 from pooling import uniform_pool, countsketch_pool
 
-
-AVAILABLE_METHODS = (
-    'mean',
-    'uniform',
-    'topk',
-    'sag',
-    'diffpool',
-    'countsketch',
-)
-
-DENSE_METHODS = {'diffpool'}
-
-
 class DenseGCNBlock(nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, activate_last=True):
         super().__init__()

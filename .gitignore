@@ -3,3 +3,6 @@ data/
 .idea/
 .DS_Store
 *.pyc
+/global_settings.json
+*.csv
+*.log

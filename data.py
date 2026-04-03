@@ -18,7 +18,7 @@ def _register_safe_globals():
             if hasattr(torch_geometric.data.storage, name):
                 safe.append(getattr(torch_geometric.data.storage, name))
 
-    torch.serialization.add_safe_globals(safe)
+    # torch.serialization.add_safe_globals(safe)
 
 
 _register_safe_globals()
