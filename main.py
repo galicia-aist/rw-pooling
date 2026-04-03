@@ -1,58 +1,11 @@
-import argparse
-import time
-
-import torch
-import torch.nn.functional as F
-import torch_geometric.data
 # torch.serialization.add_safe_globals([torch_geometric.data.data.Data])
 
 from data import load_tu_graphs, make_loaders, make_split_indices
 from models import build_model
 from utils import *
+from trainers import train_one_epoch
 
-
-def get_device():
-    if torch.cuda.is_available():
-        return torch.device('cuda')
-    if getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available():
-        return torch.device('mps')
-    return torch.device('cpu')
-
-
-def train_one_epoch(model, loader, optimizer, device):
-    model.train()
-    total_loss = 0.0
-
-    start = time.perf_counter()
-
-    for batch in loader:
-        batch = batch.to(device)
-
-        optimizer.zero_grad()
-
-        logits, aux_loss = model(batch)
-        y = batch.y.view(-1)
-
-        loss = F.cross_entropy(logits, y) + aux_loss
-        loss.backward()
-        optimizer.step()
-
-        total_loss += loss.item() * y.numel()
-
-    train_time = time.perf_counter() - start
-    avg_loss = total_loss / len(loader.dataset)
-
-    return avg_loss, train_time
-
-
-def main():
-    args = get_args()
-    device = get_device()
-    method = args.pmethod
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    logger = get_logger(args.exp_name, timestamp)
-    log_experiment_settings(logger, args)
-
+def main(args, device, method, timestamp, logger=None):
 
     if hasattr(torch, 'set_float32_matmul_precision'):
         torch.set_float32_matmul_precision('high')
@@ -183,9 +136,32 @@ def main():
         f'time_mean={time_mean:.2f}s | time_std={time_std:.2f}s'
     )
 
-    save_results_csv(args.exp_name, rows)
+    save_results_csv(args.pmethod, args.dataset, args.exp_name, timestamp, rows)
     logger.info(f'\nSaved CSV: {args.out_csv}')
 
 
 if __name__ == '__main__':
-    main()
+    args = get_args()
+    device = get_device()
+    method = args.pmethod
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    logger_settings = {
+        "logger": {
+            "model": args.pmethod,
+            "log_path": args.log_path,
+            "dataset": args.dataset,
+            "log_level": args.log_level.upper()
+        },
+        # "ddp": args.ddp
+    }
+
+    with open("global_settings.json", "w") as file:
+        json.dump(logger_settings, file, indent=4)
+
+    logger = get_logger(args.exp_name, timestamp)
+    log_experiment_settings(logger, args)
+
+
+
+    main(args, device, method, timestamp, logger=logger)

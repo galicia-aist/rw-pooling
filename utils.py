@@ -8,6 +8,13 @@ from datetime import datetime
 import numpy as np
 import torch
 
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device('cuda')
+    if getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available():
+        return torch.device('mps')
+    return torch.device('cpu')
+
 
 def set_seed(seed):
     random.seed(seed)
@@ -47,16 +54,13 @@ def summarize(values):
     return x.mean().item(), x.std(unbiased=False).item()
 
 
-def save_results_csv(exp_name, rows, filename_prefix="results"):
-    # Create timestamp
-
-
+def save_results_csv(pmethod, dataset, exp_name, timestamp, rows, filename_prefix="results"):
     # Build directory: results/<exp_name>/
     directory = os.path.join("results", exp_name)
     os.makedirs(directory, exist_ok=True)
 
     # Build file path: placeholdername_YYYYMMDD-HHMMSS.csv
-    filename = f"{filename_prefix}_{timestamp}.csv"
+    filename = f"{filename_prefix}_{pmethod}_{dataset}_{timestamp}.csv"
     path = os.path.join(directory, filename)
 
     fieldnames = [
@@ -78,7 +82,8 @@ def save_results_csv(exp_name, rows, filename_prefix="results"):
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='PROTEINS')
+    parser.add_argument('--dataset', type=str, default='PROTEINS', choices=['ENZYMES', 'IMDB-BINARY',
+                        'MUTAG', 'PROTEINS', 'REDDIT-BINARY'])
     parser.add_argument('--pmethod', type=str, choices=['mean', 'uniform', 'topk', 'sag', 'diffpool',
                         'countsketch'], help='Pooling method to use', default='mean')
     parser.add_argument('--root', type=str, default='data')
@@ -140,10 +145,6 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
-import os
-import json
-import logging
-
 def get_logger(exp_name, timestamp):
     """Sets up the logger with GPU info and color-coded formatting."""
     with open("global_settings.json", "r") as file:
@@ -159,7 +160,7 @@ def get_logger(exp_name, timestamp):
     os.makedirs(logs_dir, exist_ok=True)
 
     # Build log filename: model_dataset_expname_timestamp.log
-    filename = f"{model}_dataset{dataset_name}_{exp_name}_{timestamp}.log"
+    filename = f"{model}_dataset-{dataset_name}_{exp_name}_{timestamp}.log"
     log_path = os.path.join(logs_dir, filename)
 
     logger = logging.getLogger(f"{model}_{exp_name}_{timestamp}")
