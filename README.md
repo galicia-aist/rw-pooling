@@ -14,25 +14,25 @@ python main.py [OPTIONS]
 
 ## ⚙️ Arguments
 
-| Argument         | Type  | Default        | Description |
-|------------------|-------|----------------|-------------|
+| Argument         | Type  | Default        | Description                                                                                                                      |
+|------------------|-------|----------------|----------------------------------------------------------------------------------------------------------------------------------|
 | `--dataset`      | str   | `PROTEINS`     | Dataset (`ENZYMES`, `IMDB-BINARY`, `MUTAG`, `PROTEINS`, `REDDIT-BINARY`, `NCI1`, `NCI109`, `PTC_MR`, `FRANKENSTEIN`, `ogbg-ppa`) |
-| `--pmethod`      | str   | `asap`         | Pooling method (`sum`, `uniform`, `topk`, `sag`, `diffpool`, `countsketch`, `asap`, `max`, `edge`) |
-| `--root`         | str   | `data`         | Root directory for datasets |
-| `--runs`         | int   | `1`            | Number of independent runs |
-| `--epochs`       | int   | `200`          | Number of training epochs |
-| `--batch-size`   | int   | `32`           | Batch size |
-| `--hidden`       | int   | `64`           | Hidden dimension size |
-| `--lr`           | float | `1e-3`         | Learning rate |
-| `--weight-decay` | float | `0.0`          | Weight decay (L2 regularization) |
-| `--pool-ratio`   | float | `0.5`          | Fraction of nodes kept during pooling |
-| `--max-nodes`    | int   | `None`         | Maximum nodes per graph |
-| `--quantile`     | float | `0.95`         | Quantile threshold for pooling |
-| `--seed`         | int   | `0`            | Random seed |
-| `--log-every`    | int   | `20`           | Logging frequency (epochs) |
-| `--exp_name`     | str   | `lorem`        | Experiment name (used for logs/results directories) |
-| `--log_path`     | str   | `local`        | Path to store logs |
-| `--log_level`    | str   | `info`         | Logging level (`debug`, `info`, `warning`, `error`, `critical`) |
+| `--pmethod`      | str   | `asap`         | Pooling method (`mean`, `uniform`, `topk`, `sag`, `diffpool`, `countsketch`, `sum`, `asap`, `max`, `edge`)                       |
+| `--root`         | str   | `data`         | Root directory for datasets                                                                                                      |
+| `--runs`         | int   | `1`            | Number of independent runs                                                                                                       |
+| `--epochs`       | int   | `200`          | Number of training epochs                                                                                                        |
+| `--batch-size`   | int   | `32`           | Batch size                                                                                                                       |
+| `--hidden`       | int   | `64`           | Hidden dimension size                                                                                                            |
+| `--lr`           | float | `1e-3`         | Learning rate                                                                                                                    |
+| `--weight-decay` | float | `0.0`          | Weight decay (L2 regularization)                                                                                                 |
+| `--pool-ratio`   | float | `0.5`          | Fraction of nodes kept during pooling                                                                                            |
+| `--max-nodes`    | int   | `None`         | Maximum nodes per graph                                                                                                          |
+| `--quantile`     | float | `0.95`         | Quantile threshold for pooling                                                                                                   |
+| `--seed`         | int   | `0`            | Random seed                                                                                                                      |
+| `--log-every`    | int   | `20`           | Logging frequency (epochs)                                                                                                       |
+| `--exp_name`     | str   | `lorem`        | Experiment name (used for logs/results directories)                                                                              |
+| `--log_path`     | str   | `local`        | Path to store logs                                                                                                               |
+| `--log_level`    | str   | `info`         | Logging level (`debug`, `info`, `warning`, `error`, `critical`)                                                                  |
 ---
 
 ## 📊 Example
