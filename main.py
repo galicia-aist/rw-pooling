@@ -1,7 +1,7 @@
 # torch.serialization.add_safe_globals([torch_geometric.data.data.Data])
 from datetime import datetime
 
-from data import load_tu_graphs, make_loaders, make_split_indices
+from data import make_loaders, load_dataset
 from models import build_model
 from utils import *
 from trainers import train_one_epoch
@@ -11,24 +11,17 @@ def main(args, device, method, timestamp, logger=None):
     if hasattr(torch, 'set_float32_matmul_precision'):
         torch.set_float32_matmul_precision('high')
 
-    sparse_graphs, dense_graphs, in_channels, num_classes, max_nodes = load_tu_graphs(
-        root=args.root,
-        name=args.dataset,
-        max_nodes=args.max_nodes,
-        quantile=args.quantile,
-        use_node_attr=True,
-    )
+    logger.debug("start loading dataset")
+
+    sparse_graphs, dense_graphs, in_channels, num_classes, max_nodes, split_list = load_dataset(args)
+
+    logger.debug("start loading dataset")
 
     logger.info(
         f'Dataset loaded | name={args.dataset} | graphs={len(sparse_graphs)} | '
         f'in_channels={in_channels} | num_classes={num_classes} | '
         f'max_nodes={max_nodes} | device={device}'
     )
-
-    split_list = [
-        make_split_indices(len(sparse_graphs), seed=args.seed + run_id)
-        for run_id in range(args.runs)
-    ]
 
     rows = []
 

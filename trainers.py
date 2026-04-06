@@ -13,7 +13,7 @@ def train_one_epoch(model, loader, optimizer, device):
         optimizer.zero_grad()
 
         logits, aux_loss = model(batch)
-        y = batch.y.view(-1)
+        y = batch.y.view(-1).long() # temp
 
         loss = F.cross_entropy(logits, y) + aux_loss
         loss.backward()

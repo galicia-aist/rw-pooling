@@ -11,8 +11,11 @@ from torch_geometric.nn import (
     TopKPooling,
     dense_diff_pool,
     global_mean_pool,
+    global_add_pool,
+    global_max_pool,
+    EdgePooling,
+    ASAPooling,
 )
-
 from pooling import uniform_pool, countsketch_pool
 
 class DenseGCNBlock(nn.Module):
@@ -169,6 +172,73 @@ class CountSketchPoolNet(nn.Module):
         aux_loss = x.new_zeros(())
         return self.cls(x), aux_loss
 
+class SumPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes):
+        super().__init__()
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        x = F.relu(self.conv1(x, edge_index))
+        x = F.relu(self.conv2(x, edge_index))
+        x = global_add_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
+
+class MaxPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes):
+        super().__init__()
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        x = F.relu(self.conv1(x, edge_index))
+        x = F.relu(self.conv2(x, edge_index))
+        x = global_max_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
+
+class EdgePoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes):
+        super().__init__()
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.pool = EdgePooling(hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        x = F.relu(self.conv1(x, edge_index))
+        x, edge_index, batch, _ = self.pool(x, edge_index, batch=batch)
+        x = F.relu(self.conv2(x, edge_index))
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
+
+class ASAPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
+        super().__init__()
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.pool = ASAPooling(hidden_channels, ratio=pool_ratio)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        x = F.relu(self.conv1(x, edge_index))
+        x, edge_index, _, batch, _ = self.pool(x, edge_index, batch=batch)
+        x = F.relu(self.conv2(x, edge_index))
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
 
 def build_model(method, in_channels, hidden_channels, num_classes, max_nodes, pool_ratio):
     if method == 'mean':
@@ -188,5 +258,17 @@ def build_model(method, in_channels, hidden_channels, num_classes, max_nodes, po
 
     if method == 'countsketch':
         return CountSketchPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+
+    if method == 'sum':
+        return SumPoolNet(in_channels, hidden_channels, num_classes)
+
+    if method == 'max':
+        return MaxPoolNet(in_channels, hidden_channels, num_classes)
+
+    if method == 'edge':
+        return EdgePoolNet(in_channels, hidden_channels, num_classes)
+
+    if method == 'asap':
+        return ASAPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
 
     raise ValueError(f'Unknown method: {method}')

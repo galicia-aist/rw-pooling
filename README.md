@@ -15,25 +15,24 @@ python main.py [OPTIONS]
 ## ⚙️ Arguments
 
 | Argument         | Type  | Default        | Description |
-|------------------|------|---------------|------------|
-| `--dataset`      | str  | `PROTEINS`     | Dataset (`ENZYMES`, `IMDB-BINARY`, `MUTAG`, `PROTEINS`, `REDDIT-BINARY`) |
-| `--pmethod`      | str  | `mean`         | Pooling method (`mean`, `uniform`, `topk`, `sag`, `diffpool`, `countsketch`) |
-| `--root`         | str  | `data`         | Root directory for datasets |
-| `--runs`         | int  | `1`            | Number of independent runs |
-| `--epochs`       | int  | `200`          | Number of training epochs |
-| `--batch-size`   | int  | `32`           | Batch size |
-| `--hidden`       | int  | `64`           | Hidden dimension size |
-| `--lr`           | float| `1e-3`         | Learning rate |
-| `--weight-decay` | float| `0.0`          | Weight decay (L2 regularization) |
-| `--pool-ratio`   | float| `0.5`          | Fraction of nodes kept during pooling |
-| `--max-nodes`    | int  | `None`         | Maximum nodes per graph |
-| `--quantile`     | float| `0.95`         | Quantile threshold for pooling |
-| `--seed`         | int  | `0`            | Random seed |
-| `--log-every`    | int  | `20`           | Logging frequency (epochs) |
-| `--exp_name`     | str  | `lorem`        | Experiment name (used for logs/results directories) |
-| `--log_path`     | str  | `local`        | Path to store logs |
-| `--log_level`    | str  | `info`         | Logging level (`debug`, `info`, `warning`, `error`, `critical`) |
-
+|------------------|-------|----------------|-------------|
+| `--dataset`      | str   | `PROTEINS`     | Dataset (`ENZYMES`, `IMDB-BINARY`, `MUTAG`, `PROTEINS`, `REDDIT-BINARY`, `NCI1`, `NCI109`, `PTC_MR`, `FRANKENSTEIN`, `ogbg-ppa`) |
+| `--pmethod`      | str   | `asap`         | Pooling method (`sum`, `uniform`, `topk`, `sag`, `diffpool`, `countsketch`, `asap`, `max`, `edge`) |
+| `--root`         | str   | `data`         | Root directory for datasets |
+| `--runs`         | int   | `1`            | Number of independent runs |
+| `--epochs`       | int   | `200`          | Number of training epochs |
+| `--batch-size`   | int   | `32`           | Batch size |
+| `--hidden`       | int   | `64`           | Hidden dimension size |
+| `--lr`           | float | `1e-3`         | Learning rate |
+| `--weight-decay` | float | `0.0`          | Weight decay (L2 regularization) |
+| `--pool-ratio`   | float | `0.5`          | Fraction of nodes kept during pooling |
+| `--max-nodes`    | int   | `None`         | Maximum nodes per graph |
+| `--quantile`     | float | `0.95`         | Quantile threshold for pooling |
+| `--seed`         | int   | `0`            | Random seed |
+| `--log-every`    | int   | `20`           | Logging frequency (epochs) |
+| `--exp_name`     | str   | `lorem`        | Experiment name (used for logs/results directories) |
+| `--log_path`     | str   | `local`        | Path to store logs |
+| `--log_level`    | str   | `info`         | Logging level (`debug`, `info`, `warning`, `error`, `critical`) |
 ---
 
 ## 📊 Example
@@ -60,11 +59,14 @@ These methods allow studying both **learned vs random** and **selection vs clust
 
 ## 📚 References
 
-- **On the Effectiveness of Random Weights in Graph Neural Networks**  
-  https://arxiv.org/pdf/2502.00190
+- <a href="https://arxiv.org/pdf/2502.00190" target="_blank">
+  <strong>On the Effectiveness of Random Weights in Graph Neural Networks</strong>
+  </a>
 
-- **Understanding Pooling in Graph Neural Networks**  
-  https://arxiv.org/pdf/2110.05292
+- <a href="https://arxiv.org/pdf/2110.05292" target="_blank">
+  <strong>Understanding Pooling in Graph Neural Networks</strong>
+  </a>
 
-- **Graph Pooling for Graph Neural Networks: Progress, Challenges, and Opportunities**  
-  https://arxiv.org/pdf/2204.07321
+- <a href="https://arxiv.org/pdf/2204.07321" target="_blank">
+  <strong>Graph Pooling for Graph Neural Networks: Progress, Challenges, and Opportunities</strong>
+  </a>
