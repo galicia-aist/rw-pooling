@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import random
-from datetime import datetime
 import numpy as np
 import torch
 
@@ -54,13 +53,13 @@ def summarize(values):
     return x.mean().item(), x.std(unbiased=False).item()
 
 
-def save_results_csv(pmethod, dataset, exp_name, timestamp, rows, filename_prefix="results"):
+def save_results_csv(pmethod, dataset, exp_name, timestamp, rows, filename_prefix="results", logger=None):
     # Build directory: results/<exp_name>/
     directory = os.path.join("results", exp_name)
     os.makedirs(directory, exist_ok=True)
 
     # Build file path: placeholdername_YYYYMMDD-HHMMSS.csv
-    filename = f"{filename_prefix}_{pmethod}_{dataset}_{timestamp}.csv"
+    filename = f"{timestamp}_{filename_prefix}_{pmethod}_{dataset}.csv"
     path = os.path.join(directory, filename)
 
     fieldnames = [
@@ -79,6 +78,8 @@ def save_results_csv(pmethod, dataset, exp_name, timestamp, rows, filename_prefi
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+
+    logger.info(f"Results CSV saved to {path}")
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -99,7 +100,6 @@ def get_args():
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--log-every', type=int, default=20)
     parser.add_argument('--exp_name', type=str, default="lorem")
-    parser.add_argument('--out-csv', type=str, default='results_proteins.csv')
     parser.add_argument('--log_path', type=str, default='local', help='Path to store logs. Default is "local".')
     parser.add_argument('--log_level', type=str, default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'], help='Logging level.')

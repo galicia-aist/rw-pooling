@@ -31,7 +31,6 @@ python main.py [OPTIONS]
 | `--seed`         | int  | `0`            | Random seed |
 | `--log-every`    | int  | `20`           | Logging frequency (epochs) |
 | `--exp_name`     | str  | `lorem`        | Experiment name (used for logs/results directories) |
-| `--out-csv`      | str  | `results_proteins.csv` | Output CSV filename |
 | `--log_path`     | str  | `local`        | Path to store logs |
 | `--log_level`    | str  | `info`         | Logging level (`debug`, `info`, `warning`, `error`, `critical`) |
 
@@ -56,3 +55,16 @@ python main.py --dataset PROTEINS --pmethod mean --runs 5 --epochs 100 --exp_nam
   - `countsketch` → random clustering pooling (under development)
 
 These methods allow studying both **learned vs random** and **selection vs clustering** pooling strategies under a unified framework.
+
+---
+
+## 📚 References
+
+- **On the Effectiveness of Random Weights in Graph Neural Networks**  
+  https://arxiv.org/pdf/2502.00190
+
+- **Understanding Pooling in Graph Neural Networks**  
+  https://arxiv.org/pdf/2110.05292
+
+- **Graph Pooling for Graph Neural Networks: Progress, Challenges, and Opportunities**  
+  https://arxiv.org/pdf/2204.07321

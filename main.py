@@ -1,4 +1,5 @@
 # torch.serialization.add_safe_globals([torch_geometric.data.data.Data])
+from datetime import datetime
 
 from data import load_tu_graphs, make_loaders, make_split_indices
 from models import build_model
@@ -136,8 +137,7 @@ def main(args, device, method, timestamp, logger=None):
         f'time_mean={time_mean:.2f}s | time_std={time_std:.2f}s'
     )
 
-    save_results_csv(args.pmethod, args.dataset, args.exp_name, timestamp, rows)
-    logger.info(f'\nSaved CSV: {args.out_csv}')
+    save_results_csv(args.pmethod, args.dataset, args.exp_name, timestamp, rows, logger=logger)
 
 
 if __name__ == '__main__':
