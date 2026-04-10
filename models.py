@@ -17,6 +17,10 @@ from torch_geometric.nn import (
     ASAPooling,
 )
 from pooling import uniform_pool, countsketch_pool
+from pooling.pan_pooling import PANPooling, PANConv
+from pooling.co_pooling import CoPooling
+from  pooling.cgi_pooling import CGIPool
+from  pooling.kmis_pooling_module.kmis_pooling import KMISPooling
 
 class DenseGCNBlock(nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, activate_last=True):
@@ -95,6 +99,155 @@ class TopKPoolNet(nn.Module):
 
         aux_loss = x.new_zeros(())
         return self.cls(x), aux_loss
+
+
+class PANPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
+        super().__init__()
+
+        self.conv1 = PANConv(in_channels, hidden_channels)
+        self.pool1 = PANPooling(hidden_channels, ratio=pool_ratio)
+
+        self.conv2 = PANConv(hidden_channels, hidden_channels)
+        self.pool2 = PANPooling(hidden_channels, ratio=pool_ratio)
+
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        # --- Block 1 ---
+        x = F.relu(self.conv1(x, edge_index))
+        M = self.conv1.m
+        x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, batch=batch, M=M)
+
+        # --- Block 2 ---
+        x = F.relu(self.conv2(x, edge_index))
+        M = self.conv2.m
+        x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, batch=batch, M=M)
+
+        # --- Readout ---
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
+
+class CoPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
+        super().__init__()
+
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+
+        self.pool = CoPooling(
+            ratio=pool_ratio,
+            nhid=hidden_channels,
+            edge_ratio=0.6,
+            K=10,
+            alpha=0.1,
+            Init='PPR'
+        )
+
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x = data.x.float()
+        edge_index = data.edge_index
+        batch = data.batch
+
+        # ✅ Ensure edge_attr exists
+        edge_attr = getattr(data, 'edge_attr', None)
+        if edge_attr is None:
+            edge_attr = torch.ones(edge_index.size(1), device=x.device)
+
+        # ---- GNN ----
+        x = F.relu(self.conv1(x, edge_index))
+
+        # ---- CoPooling ----
+        x, edge_index, edge_attr, batch, _, _, _ = self.pool(
+            x, edge_index, edge_attr, batch
+        )
+
+        # ---- GNN ----
+        x = F.relu(self.conv2(x, edge_index))
+
+        # ---- Readout ----
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
+
+
+class CGIPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
+        super().__init__()
+
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.pool1 = CGIPool(hidden_channels, ratio=pool_ratio)
+
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.pool2 = CGIPool(hidden_channels, ratio=pool_ratio)
+
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        total_aux_loss = 0
+
+        x = F.relu(self.conv1(x, edge_index))
+        x, edge_index, _, batch, _, loss1 = self.pool1(x, edge_index, batch=batch)
+        total_aux_loss += loss1
+
+        x = F.relu(self.conv2(x, edge_index))
+        x, edge_index, _, batch, _, loss2 = self.pool2(x, edge_index, batch=batch)
+        total_aux_loss += loss2
+
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), total_aux_loss
+
+class KMISPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes,
+                 k=1, scorer='sagpool'):
+        super().__init__()
+
+        # --- Block 1 ---
+        self.conv1 = GraphConv(in_channels, hidden_channels)
+        self.pool1 = KMISPooling(
+            in_channels=hidden_channels,
+            k=k,
+            scorer=scorer,
+            reduce_x='mean',     # important!
+            reduce_edge='sum'
+        )
+
+        # --- Block 2 ---
+        self.conv2 = GraphConv(hidden_channels, hidden_channels)
+        self.pool2 = KMISPooling(
+            in_channels=hidden_channels,
+            k=k,
+            scorer=scorer,
+            reduce_x='mean',
+            reduce_edge='sum'
+        )
+
+        # --- Classifier ---
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        # --- Block 1 ---
+        x = F.relu(self.conv1(x, edge_index))
+        x, edge_index, _, batch, _, _, _ = self.pool1(x, edge_index, batch=batch)
+
+        # --- Block 2 ---
+        x = F.relu(self.conv2(x, edge_index))
+        x, edge_index, _, batch, _, _, _ = self.pool2(x, edge_index, batch=batch)
+
+        # --- Readout ---
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
 
 
 class SAGPoolNet(nn.Module):
@@ -270,5 +423,17 @@ def build_model(method, in_channels, hidden_channels, num_classes, max_nodes, po
 
     if method == 'asap':
         return ASAPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+
+    if method == 'pan':
+        return PANPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+
+    if method == 'cop':
+        return CoPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+
+    if method == 'cgi':
+        return CGIPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+
+    if method == 'kmis':
+        return KMISPoolNet(in_channels, hidden_channels, num_classes)
 
     raise ValueError(f'Unknown method: {method}')

@@ -70,3 +70,19 @@ These methods allow studying both **learned vs random** and **selection vs clust
 - <a href="https://arxiv.org/pdf/2204.07321" target="_blank">
   <strong>Graph Pooling for Graph Neural Networks: Progress, Challenges, and Opportunities</strong>
   </a>
+
+- <a href="https://github.com/YuGuangWang/PAN" target="_blank">
+  <strong>Path Integral Based Convolution and Pooling for Graph Neural Networks</strong>
+  </a>
+
+- <a href="https://github.com/zxwedu/Co-Pooling" target="_blank">
+  <strong>COPool Edge but not Least: Cross-View Graph Pooling</strong>
+  </a>
+
+- <a href="https://github.com/PangYunsheng8/CGIPool" target="_blank">
+  <strong>CGIPool Graph Pooling via Coarsened Graph Infomaxg</strong>
+  </a>
+
+- <a href="https://github.com/flandolfi/k-mis-pool" target="_blank">
+  <strong>KMISGeneralizing Downsampling from Regular Data to Graphs</strong>
+  </a>
