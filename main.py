@@ -28,7 +28,7 @@ def main(args, device, method, timestamp, logger=None):
 
     logger.info(f'\nTraining pooling method: {method}')
 
-    DENSE_METHODS = {'diffpool'}
+    DENSE_METHODS = {'diffpool', 'mincut'}
 
     run_accs = []
     run_train_times = []

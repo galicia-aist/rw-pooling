@@ -15,8 +15,11 @@ from torch_geometric.nn import (
     global_max_pool,
     EdgePooling,
     ASAPooling,
+    dense_mincut_pool
 )
 from pooling import uniform_pool, countsketch_pool
+from pooling.gsa_pooling import GSAPool
+from pooling.hgpsl_pooling import HGPSLPool
 from pooling.pan_pooling import PANPooling, PANConv
 from pooling.co_pooling import CoPooling
 from  pooling.cgi_pooling import CGIPool
@@ -249,6 +252,109 @@ class KMISPoolNet(nn.Module):
 
         return self.cls(x), x.new_zeros(())
 
+class GSAPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
+        super().__init__()
+
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.pool1 = GSAPool(hidden_channels, pooling_ratio=pool_ratio)
+
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.pool2 = GSAPool(hidden_channels, pooling_ratio=pool_ratio)
+
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x, edge_index, batch = data.x.float(), data.edge_index, data.batch
+
+        x = F.relu(self.conv1(x, edge_index))
+        x, edge_index, _, batch, _ = self.pool1(x, edge_index, batch=batch)
+
+        x = F.relu(self.conv2(x, edge_index))
+        x, edge_index, _, batch, _ = self.pool2(x, edge_index, batch=batch)
+
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
+
+class HGPSLPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
+        super().__init__()
+
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+
+        self.pool = HGPSLPool(
+            in_channels=hidden_channels,
+            ratio=pool_ratio
+        )
+
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x = data.x.float()
+        edge_index = data.edge_index
+        batch = data.batch
+
+        edge_attr = getattr(data, 'edge_attr', None)
+
+        # --- GNN ---
+        x = F.relu(self.conv1(x, edge_index))
+
+        # --- HGPSL Pool ---
+        x, edge_index, edge_attr, batch = self.pool(
+            x, edge_index, edge_attr, batch
+        )
+
+        # --- GNN ---
+        x = F.relu(self.conv2(x, edge_index))
+
+        # --- Readout ---
+        x = global_mean_pool(x, batch)
+
+        return self.cls(x), x.new_zeros(())
+
+class MinCutPoolNet(nn.Module):
+    def __init__(self, in_channels, hidden_channels, num_classes, max_nodes, pool_ratio=0.5):
+        super().__init__()
+
+        num_clusters = max(1, int(max_nodes * pool_ratio))
+
+        # --- Embedding ---
+        self.conv1 = DenseGCNConv(in_channels, hidden_channels)
+
+        # --- Assignment matrix S ---
+        self.pool1 = DenseGCNConv(hidden_channels, num_clusters)
+
+        # --- Post-pooling conv ---
+        self.conv2 = DenseGCNConv(hidden_channels, hidden_channels)
+
+        self.cls = nn.Linear(hidden_channels, num_classes)
+
+    def forward(self, data):
+        x = data.x.float()        # [B, N, F]
+        adj = data.adj.float()   # [B, N, N]
+        mask = data.mask         # [B, N]
+
+        # --- Embed ---
+        x = F.relu(self.conv1(x, adj, mask))
+
+        # --- Assignment matrix ---
+        s = self.pool1(x, adj, mask)   # [B, N, C]
+
+        # --- MinCut pooling ---
+        x, adj, mincut_loss, ortho_loss = dense_mincut_pool(x, adj, s, mask)
+
+        # --- Post GNN ---
+        x = F.relu(self.conv2(x, adj))
+
+        # --- Readout ---
+        x = x.mean(dim=1)   # same as global mean pool
+
+        aux_loss = mincut_loss + ortho_loss
+
+        return self.cls(x), aux_loss
 
 class SAGPoolNet(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
@@ -435,5 +541,14 @@ def build_model(method, in_channels, hidden_channels, num_classes, max_nodes, po
 
     if method == 'kmis':
         return KMISPoolNet(in_channels, hidden_channels, num_classes)
+
+    if method == 'gsa':
+        return GSAPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+
+    if method == 'hgpsl':
+        return HGPSLPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+
+    if method == 'mincut':
+        return MinCutPoolNet(in_channels, hidden_channels, num_classes, max_nodes, pool_ratio)
 
     raise ValueError(f'Unknown method: {method}')

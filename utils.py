@@ -86,7 +86,8 @@ def get_args():
     parser.add_argument('--dataset', type=str, default='PROTEINS', choices=['ENZYMES', 'IMDB-BINARY',
                         'MUTAG', 'PROTEINS', 'REDDIT-BINARY', 'NCI1', 'NCI109', 'PTC_MR', 'FRANKENSTEIN', 'ogbg-ppa'])
     parser.add_argument('--pmethod', type=str, choices=['mean', 'uniform', 'topk', 'sag', 'diffpool',
-                        'countsketch', 'sum', 'asap', 'max', 'edge', 'pan', 'cop', 'cgi', 'kmis'], help='Pooling method to use', default='sum')
+                        'countsketch', 'sum', 'asap', 'max', 'edge', 'pan', 'cop', 'cgi', 'kmis', 'gsa', 'hgpsl', 'mincut'],
+                        help='Pooling method to use', default='sum')
     parser.add_argument('--root', type=str, default='data')
     parser.add_argument('--runs', type=int, default=1)
     parser.add_argument('--epochs', type=int, default=200)

@@ -86,3 +86,11 @@ These methods allow studying both **learned vs random** and **selection vs clust
 - <a href="https://github.com/flandolfi/k-mis-pool" target="_blank">
   <strong>KMISGeneralizing Downsampling from Regular Data to Graphs</strong>
   </a>
+
+- <a href="https://github.com/psp3dcg/GSAPool/tree/master" target="_blank">
+  <strong>Structure-Feature based Graph Self-adaptive Pooling</strong>
+  </a>
+
+- <a href="https://github.com/cszhangzhen/HGP-SL/tree/master" target="_blank">
+  <strong>Hierarchical Graph Pooling with Structure Learning</strong>
+  </a>
