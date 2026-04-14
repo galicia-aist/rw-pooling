@@ -83,8 +83,9 @@ def save_results_csv(pmethod, dataset, exp_name, timestamp, rows, filename_prefi
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='PROTEINS', choices=['ENZYMES', 'IMDB-BINARY',
-                        'MUTAG', 'PROTEINS', 'REDDIT-BINARY', 'NCI1', 'NCI109', 'PTC_MR', 'FRANKENSTEIN', 'ogbg-ppa'])
+    parser.add_argument('--dataset', type=str, default='PROTEINS', choices=['D&D', 'ENZYMES', 'IMDB-BINARY',
+                        'MUTAG', 'PROTEINS', 'REDDIT-BINARY', 'NCI1', 'NCI109', 'PTC_MR', 'FRANKENSTEIN',
+                        'Mutagenicity', 'REDDIT-MULTI-5K', 'REDDIT-MULTI-12K', 'COLLAB', 'ogbg-ppa'])
     parser.add_argument('--pmethod', type=str, choices=['mean', 'uniform', 'topk', 'sag', 'diffpool',
                         'countsketch', 'sum', 'asap', 'max', 'edge', 'pan', 'cop', 'cgi', 'kmis', 'gsa', 'hgpsl', 'mincut'],
                         help='Pooling method to use', default='sum')
