@@ -6,6 +6,68 @@ import os
 import random
 import numpy as np
 import torch
+import torch.nn.functional as F
+import torch.nn as nn
+
+DATASET_TASK = {
+
+    # =========================
+    # Graph Multi-class Classification
+    # =========================
+    "ENZYMES": "graph_multiclass",
+    "MUTAG": "graph_multiclass",
+    "PROTEINS": "graph_multiclass",
+    "NCI1": "graph_multiclass",
+    "NCI109": "graph_multiclass",
+    "PTC_MR": "graph_multiclass",
+    "FRANKENSTEIN": "graph_multiclass",
+    "D&D": "graph_multiclass",
+    "MUTAGENICITY": "graph_multiclass",
+    "IMDB-MULTI": "graph_multiclass",
+    "COLLAB": "graph_multiclass",
+    "COLORS-3": "graph_multiclass",
+    "TRIANGLES": "graph_regression",
+    "MNIST": "graph_multiclass",
+    "CIFAR10": "graph_multiclass",
+    "ogbg-ppa": "graph_multiclass",
+
+    # =========================
+    # Graph Binary Classification
+    # =========================
+    "IMDB-BINARY": "graph_binary",
+    "REDDIT-BINARY": "graph_binary",
+    "REDDIT-M5K": "graph_binary",
+    "REDDIT-M12K": "graph_binary",
+    "ogbg-moltox21": "graph_binary",
+    "ogbg-moltoxcast": "graph_binary",
+
+    # OGB molecular datasets (IMPORTANT)
+    "ogbg-molhiv": "graph_binary",
+    "ogbg-molbbbp": "graph_binary",
+
+    # =========================
+    # Graph Regression
+    # =========================
+    "QM7": "graph_regression",
+    "QM8": "graph_regression",
+    "QM9": "graph_regression",
+    "ZINC_full": "graph_regression",
+    "ESOL": "graph_regression",
+    "FREESOLV": "graph_regression",
+    "Lipo": "graph_regression",
+    "FreeSolv": "graph_regression",
+    "ogbg-molesol": "graph_regression",
+
+    # =========================
+    # Node Classification
+    # =========================
+    "CORA": "node_classification",
+    "CITESEER": "node_classification",
+    "PUBMED": "node_classification",
+    "ogbn-proteins": "node_classification",
+    "ogbn-products": "node_classification",
+}
+
 
 def get_device():
     if torch.cuda.is_available():
@@ -25,26 +87,6 @@ def set_seed(seed):
     if torch.backends.cudnn.is_available():
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-
-
-@torch.no_grad()
-def evaluate(model, loader, device):
-    model.eval()
-
-    correct = 0
-    total = 0
-
-    for batch in loader:
-        batch = batch.to(device)
-        logits, _ = model(batch)
-        pred = logits.argmax(dim=-1)
-
-        y = batch.y.view(-1)
-        correct += int((pred == y).sum())
-        total += y.numel()
-
-    return correct / total
-
 
 def summarize(values):
     x = torch.tensor(values, dtype=torch.float)
@@ -83,9 +125,7 @@ def save_results_csv(pmethod, dataset, exp_name, timestamp, rows, filename_prefi
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='PROTEINS', choices=['D&D', 'ENZYMES', 'IMDB-BINARY',
-                        'MUTAG', 'PROTEINS', 'REDDIT-BINARY', 'NCI1', 'NCI109', 'PTC_MR', 'FRANKENSTEIN',
-                        'Mutagenicity', 'REDDIT-MULTI-5K', 'REDDIT-MULTI-12K', 'COLLAB', 'ogbg-ppa'])
+    parser.add_argument('--dataset', type=str, default='PROTEINS', choices=DATASET_TASK.keys())
     parser.add_argument('--pmethod', type=str, choices=['mean', 'uniform', 'topk', 'sag', 'diffpool',
                         'countsketch', 'sum', 'asap', 'max', 'edge', 'pan', 'cop', 'cgi', 'kmis', 'gsa', 'hgpsl', 'mincut'],
                         help='Pooling method to use', default='sum')
@@ -212,3 +252,70 @@ def log_experiment_settings(logger, args):
 
     # Join everything into a single string and log once
     logger.info("Experiment settings:\n" + "\n".join(lines))
+
+
+def get_task_config(dataset_name):
+    task = DATASET_TASK[dataset_name]
+
+    # -------------------------
+    # Graph Regression
+    # -------------------------
+    if task == "graph_regression":
+        return {
+            "task": "regression",
+            "loss_fn": F.mse_loss,
+            "metric": "mae",
+            "out_dim_mode": "regression"
+        }
+
+    # -------------------------
+    # Graph Binary Classification
+    # -------------------------
+    elif task == "graph_binary":
+        return {
+            "task": "binary",
+            "loss_fn": nn.BCEWithLogitsLoss(),
+            "metric": "rocauc",   # important for OGB
+            "out_dim_mode": "binary"
+        }
+
+    # -------------------------
+    # Graph Multi-class Classification
+    # -------------------------
+    elif task == "graph_multiclass":
+        return {
+            "task": "classification",
+            "loss_fn": F.cross_entropy,
+            "metric": "accuracy",
+            "out_dim_mode": "classification"
+        }
+
+    # -------------------------
+    # Node Classification
+    # -------------------------
+    elif task == "node_classification":
+        return {
+            "task": "classification",
+            "loss_fn": F.cross_entropy,
+            "metric": "accuracy",
+            "out_dim_mode": "classification"
+        }
+
+    else:
+        raise ValueError(f"Unknown task type: {task}")
+
+def get_targets(data, task):
+    if task == "classification":
+        return data.y.view(-1).long()
+
+    elif task == "binary":
+        return data.y.float()
+
+    elif task == "regression":
+        return data.y.float()
+
+    elif task == "multilabel":
+        return data.y.float()
+
+    else:
+        raise ValueError(f"Unknown task: {task}")

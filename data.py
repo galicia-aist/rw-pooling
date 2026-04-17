@@ -3,7 +3,7 @@ import torch_geometric.data
 import torch_geometric.transforms as T
 from ogb.graphproppred import PygGraphPropPredDataset
 
-from torch_geometric.datasets import TUDataset
+from torch_geometric.datasets import TUDataset, MoleculeNet
 from torch_geometric.loader import DataLoader, DenseDataLoader
 
 
@@ -25,18 +25,18 @@ def _register_safe_globals():
 _register_safe_globals()
 
 
-def load_dataset(args):
+def load_dataset(args, use_dense):
     # =========================
     # OGB
     # =========================
     if args.dataset.startswith("ogbg-"):
         dataset = PygGraphPropPredDataset(name=args.dataset, root=args.root)
 
-        sparse_graphs, dense_graphs, in_channels, max_nodes = build_graphs(
-            dataset,
-            max_nodes=args.max_nodes,
-            quantile=args.quantile,
-        )
+        if use_dense:
+            graphs, in_channels, max_nodes = build_dense_graphs(dataset, max_nodes=args.max_nodes, quantile=args.quantile)
+        else:
+            graphs, in_channels = build_sparse_graphs(dataset)
+            max_nodes = None
 
         if dataset.task_type == "multiclass classification":
             num_classes = dataset.num_classes
@@ -46,14 +46,38 @@ def load_dataset(args):
         split_list = make_ogb_split_list(dataset, args.runs)
 
         return (
-            sparse_graphs,
-            dense_graphs,
+            graphs,
             in_channels,
             num_classes,
             max_nodes,
             split_list,
         )
+    elif args.dataset in ["ESOL", "FreeSolv", "Lipo", "QM7", "QM8"]:
+        dataset = MoleculeNet(root=args.root, name=args.dataset)
 
+        if use_dense:
+            graphs, in_channels, max_nodes = build_dense_graphs(dataset, max_nodes=args.max_nodes,
+                                                                quantile=args.quantile)
+        else:
+            graphs, in_channels = build_sparse_graphs(dataset)
+            max_nodes = None
+
+        # ✅ regression → always 1 output
+        num_classes = 1  # usually 1, but safer than hardcoding
+
+        split_list = make_TU_split_list(
+            num_graphs=len(graphs),
+            seed=args.seed,
+            runs=args.runs
+        )
+
+        return (
+            graphs,
+            in_channels,
+            num_classes,
+            max_nodes,
+            split_list,
+        )
     # =========================
     # TU
     # =========================
@@ -64,23 +88,26 @@ def load_dataset(args):
             use_node_attr=True,
         )
 
-        sparse_graphs, dense_graphs, in_channels, max_nodes = build_graphs(
-            dataset,
-            max_nodes=args.max_nodes,
-            quantile=args.quantile,
-        )
+        if use_dense:
+            graphs, in_channels, max_nodes = build_dense_graphs(dataset, max_nodes=args.max_nodes,
+                                                                quantile=args.quantile)
+        else:
+            graphs, in_channels = build_sparse_graphs(dataset)
+            max_nodes = None
 
-        num_classes = dataset.num_classes
+        if args.dataset in ["TRIANGLES", "ZINC_full"]:
+            num_classes = 1
+        else:
+            num_classes = dataset.num_classes
 
         split_list = make_TU_split_list(
-            num_graphs=len(sparse_graphs),
+            num_graphs=len(graphs),
             seed=args.seed,
             runs=args.runs
         )
 
         return (
-            sparse_graphs,
-            dense_graphs,
+            graphs,
             in_channels,
             num_classes,
             max_nodes,
@@ -132,6 +159,69 @@ def build_graphs(dataset, max_nodes=None, quantile=0.95):
 
     return sparse_graphs, dense_graphs, in_channels, max_nodes
 
+def build_sparse_graphs(dataset):
+    import torch_geometric.transforms as T
+
+    add_const = T.Constant(value=1.0, cat=False) if dataset.num_features == 0 else None
+
+    sparse_graphs = []
+
+    for data in dataset:
+        data = data.clone()
+
+        if add_const is not None:
+            data = add_const(data)
+
+        sparse_graphs.append(data)
+
+    if len(sparse_graphs) == 0:
+        raise ValueError("Dataset is empty.")
+
+    in_channels = sparse_graphs[0].num_features
+
+    return sparse_graphs, in_channels
+
+def build_dense_graphs(dataset, max_nodes=None, quantile=0.95):
+
+    add_const = T.Constant(value=1.0, cat=False) if dataset.num_features == 0 else None
+
+    sizes = torch.tensor([data.num_nodes for data in dataset], dtype=torch.float)
+
+    if max_nodes is None:
+        max_nodes = max(1, int(torch.quantile(sizes, quantile).item()))
+
+    to_dense = T.ToDense(max_nodes)
+
+    dense_graphs = []
+
+    for data in dataset:
+        if data.num_nodes > max_nodes:
+            continue  # ✅ REQUIRED for dense
+
+        data = data.clone()
+
+        if add_const is not None:
+            data = add_const(data)
+
+        # remove edge_attr for dense
+        if getattr(data, 'edge_attr', None) is not None:
+            data.edge_attr = None
+
+        dense = to_dense(data)
+
+        # ensure adjacency is 2D
+        if dense.adj.dim() == 3:
+            dense.adj = (dense.adj.abs().sum(dim=-1) > 0).float()
+
+        dense_graphs.append(dense)
+
+    if len(dense_graphs) == 0:
+        raise ValueError(f"No graph left after filtering with max_nodes={max_nodes}.")
+
+    in_channels = dense_graphs[0].x.size(-1)
+
+    return dense_graphs, in_channels, max_nodes
+
 def make_ogb_split_list(dataset, runs):
     split_idx = dataset.get_idx_split()
 
@@ -173,31 +263,21 @@ def _select(graphs, indices):
 
 
 def make_loaders(
-    sparse_graphs,
-    dense_graphs,
+    graphs,
     split_indices,
     batch_size=32,
+    dense=False,
 ):
     train_idx, val_idx, test_idx = split_indices
 
-    sparse_train = _select(sparse_graphs, train_idx)
-    sparse_val = _select(sparse_graphs, val_idx)
-    sparse_test = _select(sparse_graphs, test_idx)
+    train_graphs = _select(graphs, train_idx)
+    val_graphs = _select(graphs, val_idx)
+    test_graphs = _select(graphs, test_idx)
 
-    dense_train = _select(dense_graphs, train_idx)
-    dense_val = _select(dense_graphs, val_idx)
-    dense_test = _select(dense_graphs, test_idx)
+    Loader = DenseDataLoader if dense else DataLoader
 
-    sparse_loaders = (
-        DataLoader(sparse_train, batch_size=batch_size, shuffle=True),
-        DataLoader(sparse_val, batch_size=batch_size, shuffle=False),
-        DataLoader(sparse_test, batch_size=batch_size, shuffle=False),
-    )
+    train_loader = Loader(train_graphs, batch_size=batch_size, shuffle=True)
+    val_loader = Loader(val_graphs, batch_size=batch_size, shuffle=False)
+    test_loader = Loader(test_graphs, batch_size=batch_size, shuffle=False)
 
-    dense_loaders = (
-        DenseDataLoader(dense_train, batch_size=batch_size, shuffle=True),
-        DenseDataLoader(dense_val, batch_size=batch_size, shuffle=False),
-        DenseDataLoader(dense_test, batch_size=batch_size, shuffle=False),
-    )
-
-    return sparse_loaders, dense_loaders
+    return train_loader, val_loader, test_loader

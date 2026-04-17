@@ -4,21 +4,25 @@ from datetime import datetime
 from data import make_loaders, load_dataset
 from models import build_model
 from utils import *
-from trainers import train_one_epoch
+from trainers import train_one_epoch, evaluate
+
+DENSE_METHODS = {'diffpool', 'mincut'}
 
 def main(args, device, method, timestamp, logger=None):
+
+    use_dense = method in DENSE_METHODS
 
     if hasattr(torch, 'set_float32_matmul_precision'):
         torch.set_float32_matmul_precision('high')
 
     logger.debug("start loading dataset")
 
-    sparse_graphs, dense_graphs, in_channels, num_classes, max_nodes, split_list = load_dataset(args)
+    graphs, in_channels, num_classes, max_nodes, split_list = load_dataset(args, use_dense)
 
     logger.debug("start loading dataset")
 
     logger.info(
-        f'Dataset loaded | name={args.dataset} | graphs={len(sparse_graphs)} | '
+        f'Dataset loaded | name={args.dataset} | graphs={len(graphs)} | '
         f'in_channels={in_channels} | num_classes={num_classes} | '
         f'max_nodes={max_nodes} | device={device}'
     )
@@ -27,8 +31,6 @@ def main(args, device, method, timestamp, logger=None):
 
 
     logger.info(f'\nTraining pooling method: {method}')
-
-    DENSE_METHODS = {'diffpool', 'mincut'}
 
     run_accs = []
     run_train_times = []
@@ -39,17 +41,13 @@ def main(args, device, method, timestamp, logger=None):
         seed = args.seed + run_id
         set_seed(seed)
 
-        sparse_loaders, dense_loaders = make_loaders(
-            sparse_graphs=sparse_graphs,
-            dense_graphs=dense_graphs,
-            split_indices=split_list[run_id],
-            batch_size=args.batch_size,
-        )
 
-        if method in DENSE_METHODS:
-            train_loader, val_loader, test_loader = dense_loaders
-        else:
-            train_loader, val_loader, test_loader = sparse_loaders
+        train_loader, val_loader, test_loader = make_loaders(
+            graphs,
+            split_list[run_id],
+            batch_size=args.batch_size,
+            dense=use_dense
+        )
 
         model = build_model(
             method=method,
@@ -70,15 +68,20 @@ def main(args, device, method, timestamp, logger=None):
         best_test = 0.0
         cumulative_train_time = 0.0
 
+        cfg = get_task_config(args.dataset)
+
+        loss_fn = cfg["loss_fn"]
+        task = cfg["task"]
+
         for epoch in range(1, args.epochs + 1):
-            loss, epoch_train_time = train_one_epoch(model, train_loader, optimizer, device)
+            loss, epoch_train_time = train_one_epoch(model, train_loader, optimizer, device, loss_fn, task)
             cumulative_train_time += epoch_train_time
 
-            val_acc = evaluate(model, val_loader, device)
+            val_acc = evaluate(model, val_loader, device, task)
 
             if val_acc >= best_val:
                 best_val = val_acc
-                best_test = evaluate(model, test_loader, device)
+                best_test = evaluate(model, test_loader, device, task)
 
             if epoch == 1 or epoch % args.log_every == 0 or epoch == args.epochs:
                 logger.info(
