@@ -4,7 +4,7 @@ import torch
 
 from utils import get_targets
 
-def train_one_epoch(model, loader, optimizer, device, loss_fn, task):
+def train_one_epoch_loader(model, loader, optimizer, device, loss_fn, task):
     model.train()
     total_loss = 0.0
 
@@ -32,8 +32,28 @@ def train_one_epoch(model, loader, optimizer, device, loss_fn, task):
 
     return avg_loss, train_time
 
+def train_one_epoch_fullgraph(model, data, optimizer, loss_fn):
+    model.train()
+
+    start = time.perf_counter()
+    optimizer.zero_grad()
+    logits, aux_loss = model(data)
+
+    # mask-based training
+    mask = data.train_mask
+    loss = loss_fn(logits[mask], data.y[mask]) + aux_loss
+
+    loss.backward()
+    optimizer.step()
+
+    train_time = time.perf_counter() - start
+    avg_loss = loss.item()
+
+    return avg_loss, train_time
+
+
 @torch.no_grad()
-def evaluate(model, loader, device, task):
+def evaluate_loader(model, loader, device, task):
     model.eval()
 
     ys, preds = [], []
@@ -77,3 +97,21 @@ def evaluate(model, loader, device, task):
 
     elif task == "regression":
         return torch.mean(torch.abs(pred - y)).item()
+
+
+@torch.no_grad()
+def evaluate_fullgraph(model, data, device, split="test"):
+    model.eval()
+
+    data = data.to(device)
+    logits, _ = model(data)
+
+
+    if split == "val":
+        mask = data.val_mask
+    else:
+        mask = data.test_mask
+
+    pred = logits.argmax(dim=-1)
+
+    return (pred[mask] == data.y[mask]).float().mean().item()

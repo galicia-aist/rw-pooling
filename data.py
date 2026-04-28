@@ -3,9 +3,9 @@ import torch_geometric.data
 import torch_geometric.transforms as T
 from ogb.graphproppred import PygGraphPropPredDataset
 
-from torch_geometric.datasets import TUDataset, MoleculeNet
+from torch_geometric.datasets import TUDataset, MoleculeNet, Planetoid
 from torch_geometric.loader import DataLoader, DenseDataLoader
-
+from ogb.nodeproppred import PygNodePropPredDataset
 
 def _register_safe_globals():
     safe = [torch_geometric.data.data.Data]
@@ -25,94 +25,107 @@ def _register_safe_globals():
 _register_safe_globals()
 
 
-def load_dataset(args, use_dense):
+def load_graph_datasets(args, use_dense):
+    def process(dataset):
+        if use_dense:
+            graphs, in_channels, max_nodes = build_dense_graphs(
+                dataset,
+                max_nodes=args.max_nodes,
+                quantile=args.quantile
+            )
+        else:
+            graphs, in_channels = build_sparse_graphs(dataset)
+            max_nodes = None
+
+        return graphs, in_channels, max_nodes
+
     # =========================
-    # OGB
+    # OGB (graph-level)
     # =========================
     if args.dataset.startswith("ogbg-"):
         dataset = PygGraphPropPredDataset(name=args.dataset, root=args.root)
+        graphs, in_channels, max_nodes = process(dataset)
 
-        if use_dense:
-            graphs, in_channels, max_nodes = build_dense_graphs(dataset, max_nodes=args.max_nodes, quantile=args.quantile)
-        else:
-            graphs, in_channels = build_sparse_graphs(dataset)
-            max_nodes = None
-
-        if dataset.task_type == "multiclass classification":
-            num_classes = dataset.num_classes
-        else:
-            num_classes = dataset.num_tasks
+        num_classes = (
+            dataset.num_classes
+            if dataset.task_type == "multiclass classification"
+            else dataset.num_tasks
+        )
 
         split_list = make_ogb_split_list(dataset, args.runs)
 
-        return (
-            graphs,
-            in_channels,
-            num_classes,
-            max_nodes,
-            split_list,
-        )
+    # =========================
+    # MoleculeNet (regression)
+    # =========================
     elif args.dataset in ["ESOL", "FreeSolv", "Lipo", "QM7", "QM8"]:
         dataset = MoleculeNet(root=args.root, name=args.dataset)
+        graphs, in_channels, max_nodes = process(dataset)
 
-        if use_dense:
-            graphs, in_channels, max_nodes = build_dense_graphs(dataset, max_nodes=args.max_nodes,
-                                                                quantile=args.quantile)
-        else:
-            graphs, in_channels = build_sparse_graphs(dataset)
-            max_nodes = None
+        num_classes = 1  # single-target regression
+        split_list = make_TU_split_list(len(graphs), args.seed, args.runs)
 
-        # ✅ regression → always 1 output
-        num_classes = 1  # usually 1, but safer than hardcoding
-
-        split_list = make_TU_split_list(
-            num_graphs=len(graphs),
-            seed=args.seed,
-            runs=args.runs
-        )
-
-        return (
-            graphs,
-            in_channels,
-            num_classes,
-            max_nodes,
-            split_list,
-        )
     # =========================
-    # TU
+    # TU datasets
     # =========================
     else:
-        dataset = TUDataset(
-            root=args.root,
-            name=args.dataset,
-            use_node_attr=True,
-        )
+        dataset = TUDataset(root=args.root, name=args.dataset, use_node_attr=True)
+        graphs, in_channels, max_nodes = process(dataset)
 
-        if use_dense:
-            graphs, in_channels, max_nodes = build_dense_graphs(dataset, max_nodes=args.max_nodes,
-                                                                quantile=args.quantile)
-        else:
-            graphs, in_channels = build_sparse_graphs(dataset)
-            max_nodes = None
+        num_classes = 1 if args.dataset in ["TRIANGLES", "ZINC_full"] else dataset.num_classes
+        split_list = make_TU_split_list(len(graphs), args.seed, args.runs)
 
-        if args.dataset in ["TRIANGLES", "ZINC_full"]:
-            num_classes = 1
-        else:
-            num_classes = dataset.num_classes
+    return graphs, in_channels, num_classes, max_nodes, split_list
 
-        split_list = make_TU_split_list(
-            num_graphs=len(graphs),
-            seed=args.seed,
-            runs=args.runs
-        )
+def load_node_datasets(args, device):
+    # =========================
+    # Planetoid datasets
+    # =========================
+    if args.dataset in ["Cora", "CiteSeer", "PubMed"]:
+
+        dataset = Planetoid(root=args.root, name=args.dataset)
+        data = dataset[0].to(device)
 
         return (
-            graphs,
-            in_channels,
-            num_classes,
-            max_nodes,
-            split_list,
+            data,
+            data.num_features,
+            dataset.num_classes,
+            data.train_mask.to(device),
+            data.val_mask.to(device),
+            data.test_mask.to(device),
         )
+
+    # =========================
+    # OGB node datasets
+    # =========================
+    elif args.dataset in ["ogbn-proteins", "ogbn-products", "ogbn-arxiv"]:
+
+        dataset = PygNodePropPredDataset(name=args.dataset, root=args.root)
+        data = dataset[0].to(device)
+
+        split_idx = dataset.get_idx_split()
+
+        # Convert indices → masks
+        num_nodes = data.num_nodes
+
+        train_mask = torch.zeros(num_nodes, dtype=torch.bool)
+        val_mask = torch.zeros(num_nodes, dtype=torch.bool)
+        test_mask = torch.zeros(num_nodes, dtype=torch.bool)
+
+        train_mask[split_idx["train"]] = True
+        val_mask[split_idx["valid"]] = True
+        test_mask[split_idx["test"]] = True
+
+        return (
+            data,
+            data.num_features,
+            dataset.num_classes,
+            train_mask.to(device),
+            val_mask.to(device),
+            test_mask.to(device),
+        )
+
+    else:
+        raise ValueError(f"Unknown node dataset: {args.dataset}")
 
 def build_graphs(dataset, max_nodes=None, quantile=0.95):
     add_const = T.Constant(value=1.0, cat=False) if dataset.num_features == 0 else None
@@ -262,7 +275,7 @@ def _select(graphs, indices):
     return [graphs[i] for i in indices]
 
 
-def make_loaders(
+def get_graph_loaders(
     graphs,
     split_indices,
     batch_size=32,

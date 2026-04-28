@@ -1,14 +1,19 @@
 # torch.serialization.add_safe_globals([torch_geometric.data.data.Data])
 from datetime import datetime
 
-from data import make_loaders, load_dataset
+from data import load_node_datasets, load_graph_datasets, get_graph_loaders
 from models import build_model
 from utils import *
-from trainers import train_one_epoch, evaluate
+from trainers import train_one_epoch_loader,  train_one_epoch_fullgraph, evaluate_loader, evaluate_fullgraph
 
 DENSE_METHODS = {'diffpool', 'mincut'}
 
 def main(args, device, method, timestamp, logger=None):
+
+    cfg = get_task_config(args.dataset)
+
+    loss_fn = cfg["loss_fn"]
+    task = cfg["task"]
 
     use_dense = method in DENSE_METHODS
 
@@ -17,14 +22,17 @@ def main(args, device, method, timestamp, logger=None):
 
     logger.debug("start loading dataset")
 
-    graphs, in_channels, num_classes, max_nodes, split_list = load_dataset(args, use_dense)
+    if task == "node_classification":
+        data, in_channels, num_classes, train_mask, val_mask, test_mask = load_node_datasets(args, device)
+    else:
+        graphs, in_channels, num_classes, max_nodes, split_list = load_graph_datasets(args, use_dense)
 
-    logger.debug("start loading dataset")
+    logger.debug("done loading dataset")
 
     logger.info(
-        f'Dataset loaded | name={args.dataset} | graphs={len(graphs)} | '
+        f'Dataset loaded | name={args.dataset} | '
         f'in_channels={in_channels} | num_classes={num_classes} | '
-        f'max_nodes={max_nodes} | device={device}'
+        f'device={device}'
     )
 
     rows = []
@@ -41,13 +49,17 @@ def main(args, device, method, timestamp, logger=None):
         seed = args.seed + run_id
         set_seed(seed)
 
+        if task == "node_classification":
+            train_loader, val_loader, test_loader = None, None, None
+            max_nodes = None
+        else:
+            train_loader, val_loader, test_loader = get_graph_loaders(
+                graphs,
+                split_list[run_id],
+                batch_size=args.batch_size,
+                dense=use_dense
+            )
 
-        train_loader, val_loader, test_loader = make_loaders(
-            graphs,
-            split_list[run_id],
-            batch_size=args.batch_size,
-            dense=use_dense
-        )
 
         model = build_model(
             method=method,
@@ -56,6 +68,7 @@ def main(args, device, method, timestamp, logger=None):
             num_classes=num_classes,
             max_nodes=max_nodes,
             pool_ratio=args.pool_ratio,
+            task=task
         ).to(device)
 
         optimizer = torch.optim.Adam(
@@ -68,20 +81,24 @@ def main(args, device, method, timestamp, logger=None):
         best_test = 0.0
         cumulative_train_time = 0.0
 
-        cfg = get_task_config(args.dataset)
-
-        loss_fn = cfg["loss_fn"]
-        task = cfg["task"]
-
         for epoch in range(1, args.epochs + 1):
-            loss, epoch_train_time = train_one_epoch(model, train_loader, optimizer, device, loss_fn, task)
+            if task == "node_classification":
+                loss, epoch_train_time = train_one_epoch_fullgraph(model, data, optimizer, loss_fn)
+            else:
+                loss, epoch_train_time = train_one_epoch_loader(model, train_loader, optimizer, device, loss_fn, task)
             cumulative_train_time += epoch_train_time
 
-            val_acc = evaluate(model, val_loader, device, task)
+            if task == "node_classification":
+                val_acc = evaluate_fullgraph(model, data, device, split="val")
+            else:
+                val_acc = evaluate_loader(model, val_loader, device, task)
 
             if val_acc >= best_val:
                 best_val = val_acc
-                best_test = evaluate(model, test_loader, device, task)
+                if task == "node_classification":
+                    best_test = evaluate_fullgraph(model, data, device)
+                else:
+                    best_test = evaluate_loader(model, test_loader, device, task)
 
             if epoch == 1 or epoch % args.log_every == 0 or epoch == args.epochs:
                 logger.info(

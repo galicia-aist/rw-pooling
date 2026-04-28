@@ -27,8 +27,6 @@ DATASET_TASK = {
     "COLLAB": "graph_multiclass",
     "COLORS-3": "graph_multiclass",
     "TRIANGLES": "graph_regression",
-    "MNIST": "graph_multiclass",
-    "CIFAR10": "graph_multiclass",
     "ogbg-ppa": "graph_multiclass",
 
     # =========================
@@ -41,7 +39,7 @@ DATASET_TASK = {
     "ogbg-moltox21": "graph_binary",
     "ogbg-moltoxcast": "graph_binary",
 
-    # OGB molecular datasets (IMPORTANT)
+    # OGB molecular datasets
     "ogbg-molhiv": "graph_binary",
     "ogbg-molbbbp": "graph_binary",
 
@@ -50,7 +48,6 @@ DATASET_TASK = {
     # =========================
     "QM7": "graph_regression",
     "QM8": "graph_regression",
-    "QM9": "graph_regression",
     "ZINC_full": "graph_regression",
     "ESOL": "graph_regression",
     "FREESOLV": "graph_regression",
@@ -61,11 +58,12 @@ DATASET_TASK = {
     # =========================
     # Node Classification
     # =========================
-    "CORA": "node_classification",
-    "CITESEER": "node_classification",
-    "PUBMED": "node_classification",
+    "Cora": "node_classification",
+    "CiteSeer": "node_classification",
+    "PubMed": "node_classification",
     "ogbn-proteins": "node_classification",
     "ogbn-products": "node_classification",
+    "ogbn-arxiv": "node_classification",
 }
 
 
@@ -295,7 +293,7 @@ def get_task_config(dataset_name):
     # -------------------------
     elif task == "node_classification":
         return {
-            "task": "classification",
+            "task": "node_classification",
             "loss_fn": F.cross_entropy,
             "metric": "accuracy",
             "out_dim_mode": "classification"

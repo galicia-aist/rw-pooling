@@ -83,14 +83,39 @@ class UniformPoolNet(nn.Module):
 
 
 class TopKPoolNet(nn.Module):
-    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5):
+    def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5, task_mode="graph"):
         super().__init__()
         self.conv1 = GCNConv(in_channels, hidden_channels)
         self.pool = TopKPooling(hidden_channels, ratio=pool_ratio)
         self.conv2 = GCNConv(hidden_channels, hidden_channels)
         self.cls = nn.Linear(hidden_channels, num_classes)
+        self.task = task_mode
 
     def forward(self, data):
+        if self.task == "node_classification":
+            logits = self.forward_node(data)
+        else:
+            logits = self.forward_graph(data)
+
+        return logits, logits.new_zeros(())
+
+    def forward_node(self, data):
+        x = data.x.float()
+        edge_index = data.edge_index
+
+
+        x = F.relu(self.conv1(x, edge_index))
+        x_before = x
+        batch = None
+        x, edge_index, edge_attr, batch, perm, _ = self.pool(x, edge_index, None, batch)
+        x = F.relu(self.conv2(x, edge_index, edge_attr))
+        x_unpooled = torch.zeros_like(x_before)
+        x_unpooled[perm] = x
+        x = x_unpooled + x_before
+
+        return self.cls(x)
+
+    def forward_graph(self, data):
         x = data.x.float()
         edge_index = data.edge_index
         batch = data.batch
@@ -100,8 +125,7 @@ class TopKPoolNet(nn.Module):
         x = F.relu(self.conv2(x, edge_index, edge_attr))
         x = global_mean_pool(x, batch)
 
-        aux_loss = x.new_zeros(())
-        return self.cls(x), aux_loss
+        return self.cls(x)
 
 
 class PANPoolNet(nn.Module):
@@ -499,7 +523,7 @@ class ASAPoolNet(nn.Module):
 
         return self.cls(x), x.new_zeros(())
 
-def build_model(method, in_channels, hidden_channels, num_classes, max_nodes, pool_ratio):
+def build_model(method, in_channels, hidden_channels, num_classes, max_nodes, pool_ratio, task):
     if method == 'mean':
         return MeanPoolNet(in_channels, hidden_channels, num_classes)
 
@@ -507,7 +531,7 @@ def build_model(method, in_channels, hidden_channels, num_classes, max_nodes, po
         return UniformPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
 
     if method == 'topk':
-        return TopKPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
+        return TopKPoolNet(in_channels, hidden_channels, num_classes, pool_ratio, task_mode=task)
 
     if method == 'sag':
         return SAGPoolNet(in_channels, hidden_channels, num_classes, pool_ratio)
