@@ -1,0 +1,88 @@
+{
+  "model": {
+    "type": "str",
+    "choices": ["topk"],
+    "required": true,
+    "help": "Pooling model to use"
+  },
+  "dataset": {
+    "type": "str",
+    "choices": ["MUTAG"],
+    "required": true,
+    "help": "Dataset to use"
+  },
+  "epochs": {
+    "type": "int",
+    "default": 500,
+    "help": "Number of epochs to train."
+  },
+  "lr": {
+    "type": "float",
+    "default": 0.01,
+    "help": "Initial learning rate."
+  },
+  "weight_decay": {
+    "type": "float",
+    "default": 0.0005,
+    "help": "Weight decay (L2 loss on parameters)."
+  },
+  "hidden": {
+    "type": "int",
+    "default": 16,
+    "help": "Number of hidden units."
+  },
+  "dropout": {
+    "type": "float",
+    "default": 0.5,
+    "help": "Dropout rate (1 - keep probability)."
+  },
+  "bag_ratio": {
+    "type": "float",
+    "default": 0.8,
+    "help": "Inner bag ratio of positive and negative labels"
+  },
+  "cuda": {
+    "action": "store_true",
+    "help": "Enable CUDA training (default: False)."
+  },
+  "loaders": {
+    "action": "store_true",
+    "help": "Enable NeighborLoader for mini-batch training (default: False)."
+  },
+  "ddp": {
+    "action": "store_true",
+    "default": false,
+    "help": "Use Distributed Data Parallelism."
+  },
+  "fastmode": {
+    "action": "store_true",
+    "default": false,
+    "help": "Validate during training pass."
+  },
+  "seed": {
+    "type": "int",
+    "default": 42,
+    "help": "Random seed."
+  },
+  "log_level": {
+    "type": "str",
+    "choices": ["debug", "info", "warning", "error", "critical"],
+    "default": "info",
+    "help": "Logging level."
+  },
+  "log_path": {
+    "type": "str",
+    "default": "local",
+    "help": "Path to store logs. Default is 'local'."
+  },
+  "gamma": {
+    "type": "float",
+    "default": 0.5,
+    "help": "Gamma parameter."
+  },
+  "rho": {
+    "type": "float",
+    "default": 1.0,
+    "help": "Rho parameter."
+  }
+}
