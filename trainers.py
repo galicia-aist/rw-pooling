@@ -7,9 +7,10 @@ from utils import get_targets
 def train_one_epoch_loader(model, loader, optimizer, device, loss_fn, task):
     model.train()
     total_loss = 0.0
+    total_count = 0
 
     start = time.perf_counter()
-
+    print(f"this total number of batches is {len(loader)}")
     for batch in loader:
         batch = batch.to(device)
 
@@ -21,16 +22,33 @@ def train_one_epoch_loader(model, loader, optimizer, device, loss_fn, task):
         if task == "regression":
             y = y.view(-1, 1).float()
             logits = logits.view(-1, 1)
-        loss = loss_fn(logits, y) + aux_loss
+            loss = loss_fn(logits, y) + aux_loss
+            count = y.numel()
+
+
+        elif task == "multilabel":
+            y = y.float()
+            mask = y == y
+            if mask.sum() == 0:
+                print(f"this batch sum was empty")
+                continue
+            loss = loss_fn(logits[mask], y[mask]) + aux_loss
+            count = mask.sum().item()
+
+        else:
+            loss = loss_fn(logits, y) + aux_loss
+            count = y.numel()
+
         loss.backward()
         optimizer.step()
 
-        total_loss += loss.item() * y.numel()
+        total_loss += loss.item() * count
+        total_count += count
 
     train_time = time.perf_counter() - start
-    avg_loss = total_loss / len(loader.dataset)
 
-    return avg_loss, train_time
+    return total_loss / total_count, train_time
+
 
 def train_one_epoch_fullgraph(model, data, optimizer, loss_fn):
     model.train()

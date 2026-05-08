@@ -38,6 +38,7 @@ DATASET_TASK = {
     "REDDIT-M12K": "graph_binary",
     "ogbg-moltox21": "graph_binary",
     "ogbg-moltoxcast": "graph_binary",
+    "ogbg-molpcba": "graph_binary",
 
     # OGB molecular datasets
     "ogbg-molhiv": "graph_binary",
@@ -134,7 +135,7 @@ def get_args():
     parser.add_argument('--hidden', type=int, default=64)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--weight-decay', type=float, default=0.0)
-    parser.add_argument('--pool-ratio', type=float, default=0.5)
+    parser.add_argument('--pool_ratio', type=float, default=0.5)
     parser.add_argument('--max-nodes', type=int, default=None)
     parser.add_argument('--quantile', type=float, default=0.95)
     parser.add_argument('--seed', type=int, default=0)

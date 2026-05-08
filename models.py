@@ -86,9 +86,14 @@ class TopKPoolNet(nn.Module):
     def __init__(self, in_channels, hidden_channels, num_classes, pool_ratio=0.5, task_mode="graph"):
         super().__init__()
         self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.pool = TopKPooling(hidden_channels, ratio=pool_ratio)
         self.conv2 = GCNConv(hidden_channels, hidden_channels)
-        self.cls = nn.Linear(hidden_channels, num_classes)
+        self.conv3 = GCNConv(hidden_channels, hidden_channels)
+
+        self.pool1 = TopKPooling(hidden_channels, ratio=pool_ratio)
+        self.pool2 = TopKPooling(hidden_channels, ratio=pool_ratio)
+
+        self.lin1 = nn.Linear(hidden_channels, 32)
+        self.lin2 = nn.Linear(32, num_classes)
         self.task = task_mode
 
     def forward(self, data):
@@ -121,11 +126,18 @@ class TopKPoolNet(nn.Module):
         batch = data.batch
 
         x = F.relu(self.conv1(x, edge_index))
-        x, edge_index, edge_attr, batch, _, _ = self.pool(x, edge_index, None, batch)
-        x = F.relu(self.conv2(x, edge_index, edge_attr))
+        x = F.relu(self.conv2(x, edge_index))
+        x = F.relu(self.conv3(x, edge_index))
+
+        x, edge_index, _, batch, _, _ = self.pool1(x, edge_index, None, batch)
+        x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
+
         x = global_mean_pool(x, batch)
 
-        return self.cls(x)
+        x = F.relu(self.lin1(x))
+        x = self.lin2(x)
+
+        return x
 
 
 class PANPoolNet(nn.Module):
