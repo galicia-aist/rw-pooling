@@ -1,18 +1,21 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import numpy as np
 import time
 import warnings
-warnings.filterwarnings("ignore")
 from torch_geometric.datasets import TUDataset
-max_nodes = 150
-data_path = "data"
-dataset_sparse = TUDataset(root=data_path, name="MUTAG", pre_filter=lambda data: data.num_nodes <= max_nodes, use_node_attr=True)
 import torch
-
+from utils import *
 from torch_geometric.data import DataLoader
 from pooling_models import HierarchicalGCN_TOPK
 from trainers import train, test
+
+args = get_args()
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+warnings.filterwarnings("ignore")
+max_nodes = 500
+data_path = "data"
+dataset_sparse = TUDataset(root=data_path, name=args.dataset, pre_filter=lambda data: data.num_nodes <= max_nodes, use_node_attr=True)
 num_classes = dataset_sparse.num_classes
 in_channels = dataset_sparse.num_features
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

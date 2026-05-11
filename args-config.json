@@ -7,7 +7,7 @@
   },
   "dataset": {
     "type": "str",
-    "choices": ["MUTAG"],
+    "choices": ["MUTAG", "DD", "IMDB-MULTI"],
     "required": true,
     "help": "Dataset to use"
   },
