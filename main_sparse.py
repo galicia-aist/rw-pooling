@@ -10,7 +10,8 @@ import torch
 from utils import *
 from torch_geometric.data import DataLoader
 from sparse_pooling_models import *
-from sparse_trainer import train, test
+from sparse_trainers import train, test, train_ogb, test_ogb
+from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
 
 args = get_args()
 timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -42,6 +43,9 @@ if args.dataset == "COLLAB":
 elif args.dataset == "IMDB-MULTI":
     dataset_sparse = TUDataset(root=data_path, name="IMDB-MULTI", transform=T.Compose([T.OneHotDegree(88)]),
                                use_node_attr=True)
+elif args.dataset in ["ppa", "molpcba", "molhiv"]:
+    args.dataset = "ogbg-" + args.dataset
+    dataset_sparse = PygGraphPropPredDataset(name=args.dataset, root=data_path)
 else:
     dataset_sparse = TUDataset(root=data_path, name=args.dataset, pre_filter=lambda data: data.num_nodes <= max_nodes, use_node_attr=True)
 num_classes = dataset_sparse.num_classes
@@ -57,30 +61,51 @@ best_val_accs = []
 best_test_accs = []
 early_stop_patience = args.early_stop
 tolerance = args.tolerance
+
+# Read JSON file
+with open("dataset_config.json", "r") as f:
+    DATASET_CONFIGS = json.load(f)
+
+# Example access
+cfg = DATASET_CONFIGS[args.dataset]
+
+
 for seed in seeds:
     set_seed(seed)
     dataset_sparse = dataset_sparse.shuffle()
-    train_ratio = 0.7
-    val_ratio = 0.15
-    val_ratio = 0.15
-    num_total = len(dataset_sparse)
-    num_train = int(num_total * train_ratio)
-    num_val = int(num_total * val_ratio)
-    num_test = num_total - num_train - num_val
-    train_dataset = dataset_sparse[:num_train]
-    val_dataset = dataset_sparse[num_train:num_train + num_val]
-    test_dataset = dataset_sparse[num_train + num_val:]
+    if "ogb" in args.dataset:
+        split_idx = dataset_sparse.get_idx_split()
+        dataset_sparse.shuffle()
+        train_dataset = dataset_sparse[split_idx["train"]]
+        val_dataset = dataset_sparse[split_idx["valid"]]
+        test_dataset = dataset_sparse[split_idx["test"]]
+        evaluator = Evaluator(name=args.dataset)
+    else:
+        train_ratio = 0.7
+        val_ratio = 0.15
+        num_total = len(dataset_sparse)
+        num_train = int(num_total * train_ratio)
+        num_val = int(num_total * val_ratio)
+        num_test = num_total - num_train - num_val
+        train_dataset = dataset_sparse[:num_train]
+        val_dataset = dataset_sparse[num_train:num_train + num_val]
+        test_dataset = dataset_sparse[num_train + num_val:]
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
     if args.model == "topk":
-        model = HierarchicalGCN_TOPK(in_channels=dataset_sparse.num_features, hidden_channels=64,out_channels=64,
-                                 num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+        model = HierarchicalGCN_TOPK(in_channels=dataset_sparse.num_features, hidden_channels=cfg["hidden_channels"],
+                                     out_channels=cfg["out_channels"], mlp_hidden=cfg["mlp_hidden"],
+                                     num_classes=dataset_sparse.num_classes,pool_ratio=args.pratio,
+                                     dataset_name=args.dataset).to(device)
     elif args.model == "sag":
         model = HierarchicalGCN_SAG(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
                                     num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
     elif args.model == "asap":
         model = HierarchicalGCN_ASA(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
+                                    num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+    elif args.model == "pan":
+        model = HierarchicalGCN_PAN(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
                                     num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
     elif args.model == "cop":
         model = HierarchicalGCN_CO(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
@@ -97,6 +122,12 @@ for seed in seeds:
     elif args.model == "hgpsl":
         model = HierarchicalGCN_HGPSL(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
                                       num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+    elif args.model == "ndp":
+        model = HierarchicalGCN_NDP(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
+                                      num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+    elif args.model == "graclus":
+        model = HierarchicalGCN_GRACLUS(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
+                                      num_classes=dataset_sparse.num_classes).to(device)
     else:
         raise Exception("Incorrect model")
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -105,9 +136,14 @@ for seed in seeds:
     epochs_no_improve = 0
     for epoch in range(1, args.epochs + 1):
         logger.debug(f"Current epoch: {epoch}")
-        loss = train(model, optimizer, train_loader, device)
-        val_acc = test(valid_loader, model, device)
-        test_acc = test(test_loader, model, device)
+        if "ogb" in args.dataset:
+            loss = train_ogb(model, optimizer, train_loader, device, criterion)
+            val_acc = test_ogb(valid_loader, model, device)
+            test_acc = test_ogb(test_loader, model, device)
+        else:
+            loss = train(model, optimizer, train_loader, device)
+            val_acc = test(valid_loader, model, device)
+            test_acc = test(test_loader, model, device)
         if val_acc > best_val_acc + tolerance:
             best_val_acc = val_acc
             best_test_acc = test_acc

@@ -1,13 +1,13 @@
 {
   "model": {
     "type": "str",
-    "choices": ["topk", "sag", "asap", "cop", "cgi", "kmis", "gsa", "hgpsl", "diff"],
+    "choices": ["topk", "sag", "asap", "pan", "cop", "cgi", "kmis", "gsa", "ndp", "graclus", "hgpsl", "diff", "mincut", "dmon", "hosc", "justb"],
     "required": true,
     "help": "Pooling model to use"
   },
   "dataset": {
     "type": "str",
-    "choices": ["MUTAG", "DD", "IMDB-MULTI", "PROTEINS", "COLLAB"],
+    "choices": ["MUTAG", "DD", "IMDB-MULTI", "PROTEINS", "COLLAB", "ppa"],
     "required": true,
     "help": "Dataset to use"
   },
