@@ -31,7 +31,7 @@ class HierarchicalGCN_TOPK(torch.nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, mlp_hidden, num_classes, pool_ratio, dataset_name):
         super(HierarchicalGCN_TOPK, self).__init__()
         self.dataset_name = dataset_name
-        use_improve = False if "molpcba" in dataset_name else False
+        use_improve = True if "molpcba" in dataset_name else False
         self.conv1 = GCNConv(in_channels, hidden_channels, improved=use_improve)
         self.bn1 = torch.nn.BatchNorm1d(hidden_channels)
         self.pool1 = TopKPooling(hidden_channels, ratio=pool_ratio)
@@ -41,11 +41,15 @@ class HierarchicalGCN_TOPK(torch.nn.Module):
         self.conv3 = GCNConv(hidden_channels, out_channels, improved=use_improve)
         self.bn3 = torch.nn.BatchNorm1d(out_channels)
         self.lin1 = torch.nn.Linear(out_channels, mlp_hidden)
-        self.lin2 = torch.nn.Linear(mlp_hidden, num_classes)
+        if use_improve:
+            self.lin2 = torch.nn.Linear(mlp_hidden, mlp_hidden)
+        else:
+            self.lin2 = torch.nn.Linear(mlp_hidden, num_classes)
 
     def forward(self, data):
         if "molpcba" in self.dataset_name:
             x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
+            x = x.float()
         else:
             x, edge_index, batch = data.x, data.edge_index, data.batch
             edge_attr = None

@@ -7,7 +7,7 @@
   },
   "dataset": {
     "type": "str",
-    "choices": ["MUTAG", "DD", "IMDB-MULTI", "PROTEINS", "COLLAB", "ppa"],
+    "choices": ["MUTAG", "DD", "IMDB-MULTI", "PROTEINS", "COLLAB", "ppa", "molpcba", "molhiv"],
     "required": true,
     "help": "Dataset to use"
   },

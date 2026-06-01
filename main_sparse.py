@@ -90,41 +90,41 @@ for seed in seeds:
         train_dataset = dataset_sparse[:num_train]
         val_dataset = dataset_sparse[num_train:num_train + num_val]
         test_dataset = dataset_sparse[num_train + num_val:]
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    valid_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=cfg["batch_size"], shuffle=True)
+    valid_loader = DataLoader(val_dataset, batch_size=cfg["batch_size"], shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=cfg["batch_size"], shuffle=False)
     if args.model == "topk":
         model = HierarchicalGCN_TOPK(in_channels=dataset_sparse.num_features, hidden_channels=cfg["hidden_channels"],
                                      out_channels=cfg["out_channels"], mlp_hidden=cfg["mlp_hidden"],
-                                     num_classes=dataset_sparse.num_classes,pool_ratio=args.pratio,
+                                     num_classes=dataset_sparse.num_classes,pool_ratio=cfg["pool_ratio"],
                                      dataset_name=args.dataset).to(device)
     elif args.model == "sag":
         model = HierarchicalGCN_SAG(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
-                                    num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                    num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "asap":
         model = HierarchicalGCN_ASA(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
-                                    num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                    num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "pan":
         model = HierarchicalGCN_PAN(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
-                                    num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                    num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "cop":
         model = HierarchicalGCN_CO(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
-                                   num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                   num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "cgi":
         model = HierarchicalGCN_CGI(in_channels=dataset_sparse.num_features, hidden_channels=64,out_channels=64,
-                                    num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                    num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "kmis":
         model = HierarchicalGCN_KMIS(in_channels=dataset_sparse.num_features, hidden_channels=64,out_channels=64,
                                      num_classes=dataset_sparse.num_classes).to(device)
     elif args.model == "gsa":
         model = HierarchicalGCN_GSA(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
-                                    num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                    num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "hgpsl":
         model = HierarchicalGCN_HGPSL(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
-                                      num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                      num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "ndp":
         model = HierarchicalGCN_NDP(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
-                                      num_classes=dataset_sparse.num_classes, pool_ratio=args.pratio).to(device)
+                                      num_classes=dataset_sparse.num_classes, pool_ratio=cfg["pool_ratio"]).to(device)
     elif args.model == "graclus":
         model = HierarchicalGCN_GRACLUS(in_channels=dataset_sparse.num_features, hidden_channels=64, out_channels=64,
                                       num_classes=dataset_sparse.num_classes).to(device)
@@ -137,11 +137,11 @@ for seed in seeds:
     for epoch in range(1, args.epochs + 1):
         logger.debug(f"Current epoch: {epoch}")
         if "ogb" in args.dataset:
-            loss = train_ogb(model, optimizer, train_loader, device, criterion)
-            val_acc = test_ogb(valid_loader, model, device)
-            test_acc = test_ogb(test_loader, model, device)
+            loss, _ = train_ogb(model, optimizer, train_loader, device, criterion)
+            val_loss, val_acc = test_ogb(valid_loader, model, device)
+            test_loss, test_acc = test_ogb(test_loader, model, device)
         else:
-            loss = train(model, optimizer, train_loader, device)
+            loss, _ = train(model, optimizer, train_loader, device)
             val_acc = test(valid_loader, model, device)
             test_acc = test(test_loader, model, device)
         if val_acc > best_val_acc + tolerance:
@@ -150,8 +150,9 @@ for seed in seeds:
             epochs_no_improve = 0
         else:
             epochs_no_improve += 1
+        logger.info(f'Seed: {seed}, Epoch: {epoch:03d}, Loss: {loss:.4f}, Val Acc: {val_acc:.4f}, Test Acc: {test_acc:.4f}')
         if epochs_no_improve >= early_stop_patience:
-            logger.debug(f'Early stopping at epoch {epoch} for seed {seed}')
+            logger.info(f'Early stopping at epoch {epoch} for seed {seed}')
             break
     end_time = time.time()
     total_time = end_time - start_time
